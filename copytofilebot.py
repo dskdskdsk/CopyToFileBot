@@ -19,7 +19,7 @@ CHANNEL_ID = "your_channel_id"
 OUTPUT_FILE = "telegram_posts.json"
 
 # AWS S3 доступ
-S3_BUCKET_NAME = "your_bucket_name"
+S3_BUCKET_NAME = "copytofilebot"
 S3_FILE_KEY = "telegram_posts.json"
 
 # Ініціалізація клієнта S3
