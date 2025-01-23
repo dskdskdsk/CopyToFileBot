@@ -14,8 +14,8 @@ logging.basicConfig(
 # Telegram API доступ
 API_ID = "23390151"
 API_HASH = "69d820891b50ddcdcb9abb473ecdfc32"
-BOT_TOKEN = "your_bot_token"
-CHANNEL_ID = "your_channel_id"
+#BOT_TOKEN = "your_bot_token"
+CHANNEL_ID = "thisisofshooore"
 OUTPUT_FILE = "telegram_posts.json"
 
 # AWS S3 доступ
