@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
+from telegram.ext import Application, CommandHandler, ContextTypes
 import requests
 import json
 import boto3
@@ -62,11 +62,8 @@ async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Ініціалізація JobQueue для періодичного виконання
-    job_queue = application.job_queue
-
-    # Додаємо задачу для періодичного виклику перевірки нових постів (наприклад, кожні 12 годин)
-    job_queue.run_repeating(check_new_posts, interval=43200, first=0)  # 300 секунд = 5 хвилин
+    # Додаємо задачу для періодичного виклику перевірки нових постів (наприклад, кожні 5 хвилин)
+    application.job_queue.run_repeating(check_new_posts, interval=43200, first=0)  # 43200 секунд = 12 годин
 
     # Команди
     application.add_handler(CommandHandler("safe", safe))
