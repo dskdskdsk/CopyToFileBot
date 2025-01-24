@@ -7,11 +7,11 @@ import logging
 import os
 
 # Конфігурація
-BOT_TOKEN = os.getenv("8183666502:AAH0_aOuAgHzU5T5RydUwHXj9L-SNBYCQ6k")
-CHANNEL_USERNAME = os.getenv("thisisofshooore")
-S3_BUCKET_NAME = os.getenv("copytofilebot")
-S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = os.getenv("us-east-2")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Вказуємо змінну середовища для токену
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")  # Вказуємо змінну середовища для каналу
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")  # Вказуємо змінну середовища для S3 бакету
+S3_FILE_KEY = "telegram_posts.json"  # Ключ файлу на S3
+AWS_REGION = os.getenv("AWS_REGION")  # Вказуємо змінну середовища для регіону AWS
 
 # Ініціалізація S3 клієнта
 s3_client = boto3.client("s3", region_name=AWS_REGION)
