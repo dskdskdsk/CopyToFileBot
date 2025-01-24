@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
 import requests
 import json
 import boto3
@@ -41,6 +41,14 @@ def upload_to_s3():
     except Exception as e:
         logger.error(f"Помилка під час завантаження до S3: {e}")
 
+# Функція для перевірки нових постів в каналі
+async def check_new_posts(context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Перевірка нових постів у каналі.")
+    download_from_s3()
+    # Твоя логіка для перевірки нових постів у каналі
+    # Наприклад, використовуючи Telegram API для отримання останніх постів з каналу
+    upload_to_s3()
+
 # Команда /safe для збереження повідомлень
 async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Отримана команда /safe.")
@@ -53,6 +61,12 @@ async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Запуск бота
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
+
+    # Ініціалізація JobQueue для періодичного виконання
+    job_queue = application.job_queue
+
+    # Додаємо задачу для періодичного виклику перевірки нових постів (наприклад, кожні 12 годин)
+    job_queue.run_repeating(check_new_posts, interval=43200, first=0)  # 300 секунд = 5 хвилин
 
     # Команди
     application.add_handler(CommandHandler("safe", safe))
