@@ -1,122 +1,107 @@
-import hashlib
-import boto3
+import requests
 import json
-import os
+import boto3
 import logging
-from telethon import TelegramClient
+import os
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
-# Налаштування логування
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+# Конфігурація
+BOT_TOKEN = os.getenv("8183666502:AAH0_aOuAgHzU5T5RydUwHXj9L-SNBYCQ6k")  # Токен бота, отриманий через BotFather
+CHANNEL_USERNAME = os.getenv("@thisisofshooore")  # Username каналу (наприклад, "@назва_каналу")
+S3_BUCKET_NAME = os.getenv("copytofilebot")  # Назва S3 бакету
+S3_FILE_KEY = "telegram_posts.json"  # Ім'я файлу в бакеті S3
+AWS_REGION = os.getenv("us-east-2")  # Наприклад, "us-east-1"
 
-# Telegram API доступ
-API_ID = "23390151"
-API_HASH = "69d820891b50ddcdcb9abb473ecdfc32"
-#BOT_TOKEN = "your_bot_token"
-CHANNEL_ID = "thisisofshooore"
-OUTPUT_FILE = "telegram_posts.json"
+# Ініціалізація S3 клієнта
+s3_client = boto3.client("s3", region_name=AWS_REGION)
 
-# AWS S3 доступ
-S3_BUCKET_NAME = "copytofilebot"
-S3_FILE_KEY = "telegram_posts.json"
+# Логування
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Ініціалізація клієнта S3
-s3_client = boto3.client("s3")
+# Ім'я локального файлу
+LOCAL_FILE = "telegram_posts.json"
 
-def generate_hash(text):
-    """Генерує хеш для тексту поста."""
-    hash_value = hashlib.md5(text.encode("utf-8")).hexdigest()
-    logging.debug(f"Згенеровано хеш: {hash_value} для тексту: {text[:30]}...")
-    return hash_value
-
-async def fetch_all_messages(client):
-    """Отримати всі повідомлення з каналу."""
-    logging.info("Початок отримання повідомлень з каналу Telegram.")
-    messages = []
+# Завантаження файлу з S3 або створення нового
+def download_from_s3():
     try:
-        async for message in client.iter_messages(CHANNEL_ID):
-            if message.text:
-                msg_data = {
-                    "message_id": message.id,
-                    "text": message.text,
-                    "date": str(message.date),
-                    "hash": generate_hash(message.text)
-                }
-                messages.append(msg_data)
-                logging.debug(f"Отримано повідомлення: {msg_data}")
-        logging.info(f"Загалом отримано повідомлень: {len(messages)}")
+        s3_client.download_file(S3_BUCKET_NAME, S3_FILE_KEY, LOCAL_FILE)
+        logger.info(f"Файл {S3_FILE_KEY} завантажено з S3.")
     except Exception as e:
-        logging.error(f"Помилка під час отримання повідомлень: {e}")
-    return messages
+        logger.warning(f"Не вдалося завантажити файл з S3: {e}. Буде створено новий.")
+        with open(LOCAL_FILE, "w", encoding="utf-8") as file:
+            json.dump([], file)
 
-def load_existing_messages():
-    """Завантажити повідомлення з S3."""
-    logging.info("Спроба завантаження існуючого файлу з S3.")
+# Збереження файлу до S3
+def upload_to_s3():
     try:
-        s3_client.download_file(S3_BUCKET_NAME, S3_FILE_KEY, OUTPUT_FILE)
-        logging.info(f"Файл {OUTPUT_FILE} успішно завантажено з S3.")
-        with open(OUTPUT_FILE, "r", encoding="utf-8") as file:
-            messages = json.load(file)
-            logging.info(f"Завантажено повідомлень із файлу: {len(messages)}")
-            return messages
+        s3_client.upload_file(LOCAL_FILE, S3_BUCKET_NAME, S3_FILE_KEY)
+        logger.info(f"Файл {LOCAL_FILE} успішно завантажено до S3.")
     except Exception as e:
-        logging.warning(f"Не вдалося завантажити файл {S3_FILE_KEY} з S3: {e}")
-        return []
+        logger.error(f"Помилка під час завантаження до S3: {e}")
 
-def save_messages_to_s3(messages):
-    """Зберегти оновлені повідомлення в S3."""
-    logging.info(f"Спроба збереження файлу {OUTPUT_FILE} в S3.")
+# Збереження повідомлень у файл
+def save_messages(messages):
     try:
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as file:
-            json.dump(messages, file, ensure_ascii=False, indent=4)
-        logging.info(f"Файл {OUTPUT_FILE} успішно оновлено локально.")
-        s3_client.upload_file(OUTPUT_FILE, S3_BUCKET_NAME, S3_FILE_KEY)
-        logging.info(f"Файл {OUTPUT_FILE} успішно завантажено в S3 як {S3_FILE_KEY}.")
-    except Exception as e:
-        logging.error(f"Помилка під час збереження файлу {OUTPUT_FILE} в S3: {e}")
+        if not os.path.exists(LOCAL_FILE):
+            existing_messages = []
+        else:
+            with open(LOCAL_FILE, "r", encoding="utf-8") as file:
+                existing_messages = json.load(file)
 
-async def sync_channel(client):
-    """Синхронізація повідомлень."""
-    logging.info("Початок синхронізації повідомлень.")
+        existing_ids = {msg["message_id"] for msg in existing_messages}
+        new_messages = [msg for msg in messages if msg["message_id"] not in existing_ids]
+
+        if new_messages:
+            logger.info(f"Збереження {len(new_messages)} нових повідомлень.")
+            existing_messages.extend(new_messages)
+            with open(LOCAL_FILE, "w", encoding="utf-8") as file:
+                json.dump(existing_messages, file, ensure_ascii=False, indent=4)
+            upload_to_s3()
+        else:
+            logger.info("Немає нових повідомлень для збереження.")
+    except Exception as e:
+        logger.error(f"Помилка при збереженні повідомлень: {e}")
+
+# Команда /save для збереження постів вручну
+def save_command(update: Update, context: CallbackContext):
+    logger.info("Отримано команду /save від користувача.")
     try:
-        # Отримуємо всі повідомлення з каналу
-        current_messages = await fetch_all_messages(client)
-
-        # Завантажуємо збережені повідомлення
-        saved_messages = load_existing_messages()
-
-        # Отримуємо ID повідомлень
-        saved_message_ids = {msg["message_id"] for msg in saved_messages}
-        current_message_ids = {msg["message_id"] for msg in current_messages}
-
-        # Видаляємо повідомлення, яких більше немає в каналі
-        updated_messages = [msg for msg in saved_messages if msg["message_id"] in current_message_ids]
-
-        # Додаємо нові повідомлення
-        for msg in current_messages:
-            if msg["message_id"] not in saved_message_ids:
-                updated_messages.append(msg)
-                logging.info(f"Додано нове повідомлення: {msg}")
-
-        # Зберігаємо оновлений список повідомлень
-        save_messages_to_s3(updated_messages)
-        logging.info("Синхронізація завершена успішно.")
+        # Імітуємо отримання повідомлень для прикладу
+        example_messages = [
+            {
+                "message_id": 12345,
+                "text": "Тестове повідомлення",
+                "date": "2025-01-22T12:00:00",
+            }
+        ]
+        save_messages(example_messages)
+        update.message.reply_text("Повідомлення успішно збережено!")
     except Exception as e:
-        logging.error(f"Помилка під час синхронізації: {e}")
+        logger.error(f"Помилка при виконанні команди /save: {e}")
+        update.message.reply_text("Сталася помилка при збереженні повідомлень.")
 
-async def main():
-    """Основний цикл."""
-    logging.info("Бот розпочав роботу.")
-    client = TelegramClient("session_name", API_ID, API_HASH)
-    try:
-        async with client:
-            await sync_channel(client)
-        logging.info("Робота бота завершена успішно.")
-    except Exception as e:
-        logging.critical(f"Критична помилка в основному циклі: {e}")
+# Команда /start для перевірки роботи бота
+def start_command(update: Update, context: CallbackContext):
+    logger.info("Отримано команду /start від користувача.")
+    update.message.reply_text("Бот запущено. Використовуйте /save для збереження постів!")
+
+# Основна функція для запуску бота
+def main():
+    logger.info("Запуск бота...")
+    download_from_s3()
+
+    updater = Updater(BOT_TOKEN)
+    dispatcher = updater.dispatcher
+
+    # Реєструємо команди
+    dispatcher.add_handler(CommandHandler("start", start_command))
+    dispatcher.add_handler(CommandHandler("save", save_command))
+
+    # Запуск бота
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
