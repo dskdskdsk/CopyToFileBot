@@ -43,22 +43,26 @@ def upload_to_s3():
         logger.error(f"Помилка під час завантаження до S3: {e}")
 
 # Перевірка нових постів на каналі
-def check_new_posts():
+def check_new_posts(context=None):
     try:
-        # Отримуємо повідомлення з каналу
+        logger.info("Перевірка нових повідомлень...")
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
         response = requests.get(url)
         data = response.json()
 
-        # Якщо є нові повідомлення
-        if data["ok"] and data["result"]:
+        if data["ok"]:
+            logger.info(f"Отримано дані: {data['result']}")
             new_posts = []
             for message in data["result"]:
-                if message.get("message") and message["message"].get("chat") and message["message"]["chat"]["username"] == CHANNEL_USERNAME:
-                    new_posts.append(message["message"]["text"])
+                if message.get("message"):
+                    chat = message["message"].get("chat", {})
+                    if chat.get("username") == CHANNEL_USERNAME:
+                        logger.info(f"Знайдено повідомлення з каналу @{CHANNEL_USERNAME}.")
+                        new_posts.append(message["message"].get("text", ""))
 
             # Якщо є нові пости
             if new_posts:
+                logger.info(f"Знайдено {len(new_posts)} нових повідомлень.")
                 download_from_s3()
                 try:
                     with open(LOCAL_FILE, "r", encoding="utf-8") as file:
@@ -71,12 +75,12 @@ def check_new_posts():
                 with open(LOCAL_FILE, "w", encoding="utf-8") as file:
                     json.dump(posts, file, ensure_ascii=False, indent=4)
 
-                logger.info(f"Нове повідомлення додано. Збережено {len(new_posts)} повідомлень.")
+                logger.info(f"Повідомлення збережені. Загалом: {len(posts)} повідомлень.")
                 upload_to_s3()
             else:
                 logger.info("Нових повідомлень немає.")
         else:
-            logger.warning("Не вдалося отримати повідомлення з каналу.")
+            logger.warning(f"Помилка отримання даних з Telegram API: {data.get('description')}")
     except Exception as e:
         logger.error(f"Помилка при перевірці нових постів: {e}")
 
@@ -84,9 +88,7 @@ def check_new_posts():
 async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Отримана команда /safe.")
     await update.message.reply_text("Збереження повідомлень розпочато.")
-    download_from_s3()
-    # Твоя логіка для збереження повідомлень
-    upload_to_s3()
+    check_new_posts()
     await update.message.reply_text("Повідомлення успішно збережено.")
 
 # Запуск бота
