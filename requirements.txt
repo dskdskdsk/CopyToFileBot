@@ -1,2 +1,3 @@
-boto3
-telethon
+boto3==1.28.1
+python-telegram-bot==20.5
+requests==2.31.0
