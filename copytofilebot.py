@@ -36,18 +36,49 @@ def download_from_s3():
 # Збереження файлу до S3
 def upload_to_s3():
     try:
+        logger.info(f"Починається завантаження файлу {LOCAL_FILE} на S3...")
         s3_client.upload_file(LOCAL_FILE, S3_BUCKET_NAME, S3_FILE_KEY)
         logger.info(f"Файл {LOCAL_FILE} успішно завантажено до S3.")
     except Exception as e:
         logger.error(f"Помилка під час завантаження до S3: {e}")
 
-# Функція для перевірки нових постів в каналі
-async def check_new_posts(context: ContextTypes.DEFAULT_TYPE):
-    logger.info("Перевірка нових постів у каналі.")
-    download_from_s3()
-    # Твоя логіка для перевірки нових постів у каналі
-    # Наприклад, використовуючи Telegram API для отримання останніх постів з каналу
-    upload_to_s3()
+# Перевірка нових постів на каналі
+def check_new_posts():
+    try:
+        # Отримуємо повідомлення з каналу
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+        response = requests.get(url)
+        data = response.json()
+
+        # Якщо є нові повідомлення
+        if data["ok"] and data["result"]:
+            new_posts = []
+            for message in data["result"]:
+                if message.get("message") and message["message"].get("chat") and message["message"]["chat"]["username"] == CHANNEL_USERNAME:
+                    new_posts.append(message["message"]["text"])
+
+            # Якщо є нові пости
+            if new_posts:
+                download_from_s3()
+                try:
+                    with open(LOCAL_FILE, "r", encoding="utf-8") as file:
+                        posts = json.load(file)
+                except json.JSONDecodeError:
+                    posts = []
+
+                posts.extend(new_posts)
+
+                with open(LOCAL_FILE, "w", encoding="utf-8") as file:
+                    json.dump(posts, file, ensure_ascii=False, indent=4)
+
+                logger.info(f"Нове повідомлення додано. Збережено {len(new_posts)} повідомлень.")
+                upload_to_s3()
+            else:
+                logger.info("Нових повідомлень немає.")
+        else:
+            logger.warning("Не вдалося отримати повідомлення з каналу.")
+    except Exception as e:
+        logger.error(f"Помилка при перевірці нових постів: {e}")
 
 # Команда /safe для збереження повідомлень
 async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -62,11 +93,11 @@ async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Додаємо задачу для періодичного виклику перевірки нових постів (наприклад, кожні 5 хвилин)
-    application.job_queue.run_repeating(check_new_posts, interval=43200, first=0)  # 43200 секунд = 12 годин
-
     # Команди
     application.add_handler(CommandHandler("safe", safe))
+
+    # Перевірка нових постів кожні 12 годин (43200 секунд)
+    application.job_queue.run_repeating(check_new_posts, interval=43200, first=0)
 
     logger.info("Бот запущений.")
     application.run_polling()
