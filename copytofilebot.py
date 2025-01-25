@@ -20,7 +20,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # URL вашого сервера (на�
 s3_client = boto3.client("s3", region_name=AWS_REGION)
 
 # Логування
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Ім'я локального файлу
@@ -29,6 +29,7 @@ LOCAL_FILE = "telegram_posts.json"
 # Завантаження файлу з S3 або створення нового
 def download_from_s3():
     try:
+        logger.debug(f"Спроба завантажити файл {S3_FILE_KEY} з S3...")
         s3_client.download_file(S3_BUCKET_NAME, S3_FILE_KEY, LOCAL_FILE)
         logger.info(f"Файл {S3_FILE_KEY} завантажено з S3.")
     except Exception as e:
@@ -39,6 +40,7 @@ def download_from_s3():
 # Збереження файлу до S3
 def upload_to_s3():
     try:
+        logger.debug(f"Спроба завантажити файл {LOCAL_FILE} до S3...")
         s3_client.upload_file(LOCAL_FILE, S3_BUCKET_NAME, S3_FILE_KEY)
         logger.info(f"Файл {LOCAL_FILE} успішно завантажено до S3.")
     except Exception as e:
@@ -55,42 +57,57 @@ async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Обробка оновлень із Telegram
 async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Отримано оновлення: {update}")
+    
+    if update.channel_post:
+        logger.debug(f"Перевірка отриманого каналу: {update.channel_post.chat.username}")
+        if update.channel_post.chat.username == CHANNEL_USERNAME:
+            text = update.channel_post.text
+            logger.info(f"Отримано пост з каналу {CHANNEL_USERNAME}: {text}")
 
-    if update.channel_post and update.channel_post.chat.username == CHANNEL_USERNAME:
-        text = update.channel_post.text
-        logger.info(f"Отримано пост з каналу: {text}")
+            # Завантаження файлу з S3
+            download_from_s3()
+            try:
+                with open(LOCAL_FILE, "r", encoding="utf-8") as file:
+                    posts = json.load(file)
+            except json.JSONDecodeError:
+                posts = []
+                logger.warning("Файл з постами порожній або має помилки в форматуванні.")
 
-        # Завантаження файлу з S3
-        download_from_s3()
-        try:
-            with open(LOCAL_FILE, "r", encoding="utf-8") as file:
-                posts = json.load(file)
-        except json.JSONDecodeError:
-            posts = []
+            posts.append(text)
 
-        posts.append(text)
+            # Збереження нового файлу
+            with open(LOCAL_FILE, "w", encoding="utf-8") as file:
+                json.dump(posts, file, ensure_ascii=False, indent=4)
 
-        # Збереження нового файлу
-        with open(LOCAL_FILE, "w", encoding="utf-8") as file:
-            json.dump(posts, file, ensure_ascii=False, indent=4)
+            upload_to_s3()
+        else:
+            logger.warning(f"Отримано пост від нецільового каналу: {update.channel_post.chat.username}")
+    else:
+        logger.warning("Отримано повідомлення, яке не є каналом.")
 
-        upload_to_s3()
+# Ініціалізація Flask серверу
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    data = request.json
+    logger.debug(f"Отримано дані через webhook: {data}")
+    try:
+        update = Update.de_json(data, application.bot)
+        logger.debug(f"Обробка оновлення: {update}")
+        await application.update_queue.put(update)
+    except Exception as e:
+        logger.error(f"Помилка обробки webhook: {e}")
+    return jsonify({"ok": True})
 
 # Запуск бота з Webhook
 async def main():
+    # Ініціалізація Application
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо обробники
     application.add_handler(CommandHandler("safe", safe))
-
-    # Flask сервер для Webhook
-    app = Flask(__name__)
-
-    @app.route("/webhook", methods=["POST"])
-    async def webhook():
-        data = request.json
-        await application.update_queue.put(data)  # Перевірте, чи підтримує асинхронну обробку
-        return jsonify({"ok": True})
+    application.add_handler(MessageHandler(Filters.channel_posts, process_update))
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
@@ -101,4 +118,6 @@ async def main():
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8443)))
 
 if __name__ == "__main__":
+    # Запуск через asyncio
+    logger.info("Запуск бота...")
     asyncio.run(main())
