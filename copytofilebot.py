@@ -8,8 +8,6 @@ import logging
 from fastapi import FastAPI, Request
 import uvicorn
 
-import os
-
 BOT_TOKEN = "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Токен бота
 CHANNEL_USERNAME = "thisisofshooore"  # Назва каналу
 S3_BUCKET_NAME = "copytofilebot"  # Назва бакету S3
