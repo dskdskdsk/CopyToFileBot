@@ -9,16 +9,23 @@ from fastapi import FastAPI, Request
 import uvicorn
 
 # Конфігурація
-BOT_TOKEN = "7779435652: AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Ваш токен бота
-CHANNEL_USERNAME = "thisisofshooore"  # Назва вашого каналу
-S3_BUCKET_NAME = "copytofilebot"  # Назва вашого S3 бакету
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I")  # Токен бота
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "thisisofshooore")  # Назва каналу
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "copytofilebot")  # Назва бакету S3
 S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = "us-east-2"  # Регион AWS
-WEBHOOK_URL = "https://copytofilebot-a33c9815052b.herokuapp.com"  # Ваш URL на Heroku або іншому хостингу
-PORT = 8000  # Порт для FastAPI
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")  # Регион AWS
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://copytofilebot-a33c9815052b.herokuapp.com/")  # URL вашого сервера
+PORT = int(os.getenv("PORT", 8000))
 
 # Ініціалізація S3
-s3_client = boto3.client("s3", region_name=AWS_REGION)
+s3_client = boto3.client(
+    "s3", 
+    region_name=AWS_REGION, 
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+)
 
 # Логування
 logging.basicConfig(level=logging.DEBUG)
