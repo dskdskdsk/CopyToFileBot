@@ -5,6 +5,8 @@ import json
 import boto3
 import logging
 from flask import Flask, request, jsonify
+import asyncio
+import uvicorn
 
 # Конфігурація
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Токен бота
@@ -76,8 +78,6 @@ async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Запуск бота з Webhook
 async def main():
-    global app  # Оголошуємо app як глобальний
-
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо обробники
@@ -87,19 +87,18 @@ async def main():
     app = Flask(__name__)
 
     @app.route("/webhook", methods=["POST"])
-    def webhook():
+    async def webhook():
         data = request.json
-        application.update_queue.put(data)
+        await application.update_queue.put(data)  # Перевірте, чи підтримує асинхронну обробку
         return jsonify({"ok": True})
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
     await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
 
-    # Запуск Flask сервера
-    port = int(os.getenv("PORT", 8443))
-    app.run(host="0.0.0.0", port=port)
+    # Запуск Flask сервера через uvicorn
+    logger.info("Запуск Flask сервера через uvicorn...")
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8443)))
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
