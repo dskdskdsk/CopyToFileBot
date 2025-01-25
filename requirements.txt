@@ -1,4 +1,4 @@
+telegram
 boto3
 flask
-python-telegram-bot
-gunicorn
+uvicorn
