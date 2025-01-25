@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Request
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 import os
 import json
 import boto3
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-import asyncio
+from fastapi import FastAPI
+from telegram.ext import MessageHandler, Filters
 import uvicorn
 
 # Конфігурація
