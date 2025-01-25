@@ -124,7 +124,7 @@ async def main():
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
-    await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
+    await application.bot.set_webhook(url=f"{WEBHOOK_URL.rstrip('/')}/webhook")
 
     # Запуск FastAPI через Uvicorn
     logger.info("Запуск FastAPI через Uvicorn...")
