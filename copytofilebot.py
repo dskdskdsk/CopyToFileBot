@@ -12,7 +12,7 @@ BOT_TOKEN = "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Токен бо�
 CHANNEL_USERNAME = "thisisofshooore"  # Назва каналу
 S3_BUCKET_NAME = "copytofilebot"  # Назва бакету S3
 S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = "us-east-2"  # Регион AWS
+AWS_REGION = "us-east-2"  # Регіон AWS
 
 # Використання змінних середовища для AWS ключів
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -124,7 +124,7 @@ async def main():
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
-    await application.bot.set_webhook(url=f"{WEBHOOK_URL.rstrip('/')}/webhook")
+    await application.bot.set_webhook(url="https://copytofilebot-a33c9815052b.herokuapp.com/webhook")
 
     # Запуск FastAPI через Uvicorn
     logger.info("Запуск FastAPI через Uvicorn...")
