@@ -76,6 +76,8 @@ async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Запуск бота з Webhook
 async def main():
+    global app  # Оголошуємо app як глобальний
+
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо обробники
