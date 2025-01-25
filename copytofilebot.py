@@ -5,7 +5,8 @@ import json
 import boto3
 import logging
 from fastapi import FastAPI
-from telegram.ext import MessageHandler, Filters
+from telegram.ext import MessageHandler
+from telegram.ext.filters import Filters
 import uvicorn
 
 # Конфігурація
