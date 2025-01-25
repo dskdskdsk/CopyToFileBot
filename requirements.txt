@@ -1,4 +1,5 @@
-python-telegram-bot
-boto3
-flask
-uvicorn
+python-telegram-bot==20.0a3
+boto3==1.26.16
+Flask==2.2.3
+uvicorn==0.20.0
+asyncio==3.4.3
