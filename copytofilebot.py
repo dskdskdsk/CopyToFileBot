@@ -1,10 +1,10 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from fastapi import FastAPI, Request
 import os
 import json
 import boto3
 import logging
-from flask import Flask, request, jsonify
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 import asyncio
 import uvicorn
 
@@ -85,12 +85,12 @@ async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         logger.warning("Отримано повідомлення, яке не є каналом.")
 
-# Ініціалізація Flask серверу
-app = Flask(__name__)
+# Ініціалізація FastAPI сервера
+app = FastAPI()
 
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    data = request.json
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
     logger.debug(f"Отримано дані через webhook: {data}")
     try:
         update = Update.de_json(data, application.bot)
@@ -98,7 +98,7 @@ async def webhook():
         await application.update_queue.put(update)
     except Exception as e:
         logger.error(f"Помилка обробки webhook: {e}")
-    return jsonify({"ok": True})
+    return {"ok": True}
 
 # Запуск бота з Webhook
 async def main():
@@ -113,8 +113,8 @@ async def main():
     logger.info("Встановлення Webhook...")
     await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
 
-    # Запуск Flask сервера через uvicorn
-    logger.info("Запуск Flask сервера через uvicorn...")
+    # Запуск FastAPI сервера через uvicorn
+    logger.info("Запуск FastAPI сервера через uvicorn...")
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8443)))
 
 if __name__ == "__main__":
