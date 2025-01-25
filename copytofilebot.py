@@ -4,8 +4,7 @@ import os
 import json
 import boto3
 import logging
-
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 # Конфігурація
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Токен бота
@@ -76,7 +75,7 @@ async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upload_to_s3()
 
 # Запуск бота з Webhook
-def main():
+async def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Додаємо обробники
@@ -89,7 +88,7 @@ def main():
     def webhook():
         data = request.json
         application.update_queue.put(data)
-        return {"ok": True}
+        return jsonify({"ok": True})
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
@@ -100,4 +99,5 @@ def main():
     app.run(host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
