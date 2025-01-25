@@ -1,6 +1,6 @@
+Flask==2.0.3
+werkzeug==2.0.3
 python-telegram-bot==20.0a3
 boto3==1.26.16
-Flask==2.1.1
-werkzeug==2.1.1
 uvicorn==0.20.0
 asyncio==3.4.3
