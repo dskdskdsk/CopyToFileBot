@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 import logging
 from telegram import Update
 from telegram.ext import Application
@@ -8,7 +8,7 @@ import asyncio
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 # Підключення до Telegram бота
 async def process_update(data):
@@ -19,7 +19,7 @@ async def process_update(data):
 @app.route('/webhook', methods=['POST'])
 async def webhook():
     try:
-        data = request.json
+        data = await request.get_json()  # Використовуємо асинхронну обробку даних
         if data:
             logger.info(f"Отримано дані: {data}")
             await process_update(data)
@@ -31,7 +31,7 @@ async def webhook():
         logger.error(f"Помилка обробки запиту: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# Запуск Flask серверу через uvicorn
+# Запуск Quart серверу через uvicorn
 if __name__ == "__main__":
     from uvicorn import run
     logger.info("Запуск сервера через uvicorn...")
