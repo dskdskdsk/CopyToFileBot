@@ -1,1 +1,1 @@
-worker: python copytofilebot.py
+web: python app.py
