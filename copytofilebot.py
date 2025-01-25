@@ -9,13 +9,13 @@ from fastapi import FastAPI, Request
 import uvicorn
 
 # Конфігурація
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Токен бота
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")  # Назва каналу
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")  # S3 бакет
+BOT_TOKEN = "7779435652: AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Ваш токен бота
+CHANNEL_USERNAME = "thisisofshooore"  # Назва вашого каналу
+S3_BUCKET_NAME = "copytofilebot"  # Назва вашого S3 бакету
 S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = os.getenv("AWS_REGION")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # URL вашого сервера (наприклад, Heroku або інший хостинг)
-PORT = int(os.getenv("PORT", 8000))
+AWS_REGION = "us-east-2"  # Регион AWS
+WEBHOOK_URL = "https://copytofilebot-a33c9815052b.herokuapp.com"  # Ваш URL на Heroku або іншому хостингу
+PORT = 8000  # Порт для FastAPI
 
 # Ініціалізація S3
 s3_client = boto3.client("s3", region_name=AWS_REGION)
