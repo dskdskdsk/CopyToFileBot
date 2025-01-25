@@ -93,7 +93,7 @@ def main():
 
     # Встановлення Webhook
     logger.info("Встановлення Webhook...")
-    application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
+    await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
 
     # Запуск Flask сервера
     port = int(os.getenv("PORT", 8443))
