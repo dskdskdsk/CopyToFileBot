@@ -1,1 +1,1 @@
-web: python copytofilebot.py
+web: gunicorn copytofilebot:app
