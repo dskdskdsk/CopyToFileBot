@@ -16,7 +16,7 @@ S3_FILE_KEY = "telegram_posts.json"
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")  # Регион AWS
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://copytofilebot-a33c9815052b.herokuapp.com/")  # URL вашого сервера
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://copytofilebot-a33c9815052b.herokuapp.com")  # URL вашого сервера
 PORT = int(os.getenv("PORT", 8000))
 
 # Ініціалізація S3
