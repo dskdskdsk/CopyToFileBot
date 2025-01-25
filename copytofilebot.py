@@ -8,16 +8,23 @@ import logging
 from fastapi import FastAPI, Request
 import uvicorn
 
-# Конфігурація
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I")  # Токен бота
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "thisisofshooore")  # Назва каналу
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "copytofilebot")  # Назва бакету S3
+import os
+
+BOT_TOKEN = "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Токен бота
+CHANNEL_USERNAME = "thisisofshooore"  # Назва каналу
+S3_BUCKET_NAME = "copytofilebot"  # Назва бакету S3
 S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = os.getenv("AWS_REGION", "us-east-2")  # Регион AWS
+AWS_REGION = "us-east-2"  # Регион AWS
+
+# Використання змінних середовища для AWS ключів
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://copytofilebot-a33c9815052b.herokuapp.com")  # URL вашого сервера
-PORT = int(os.getenv("PORT", 8000))
+
+if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+    raise ValueError("AWS credentials are not set in the environment.")
+    
+WEBHOOK_URL = "https://copytofilebot-a33c9815052b.herokuapp.com"  # URL вашого сервера
+PORT = 8000
 
 # Ініціалізація S3
 s3_client = boto3.client(
