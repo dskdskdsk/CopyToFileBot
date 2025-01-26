@@ -1,137 +1,64 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler
-from telegram.ext import filters
 import os
 import json
+import requests
 import boto3
-import logging
-from fastapi import FastAPI, Request
-import uvicorn
+from datetime import datetime
 
-BOT_TOKEN = "7779435652:AAG68Xg1ZkPIBa1AkBZxL8BguszLRxA1I1I"  # Токен бота
-CHANNEL_USERNAME = "thisisofshooore"  # Назва каналу
-S3_BUCKET_NAME = "copytofilebot"  # Назва бакету S3
-S3_FILE_KEY = "telegram_posts.json"
-AWS_REGION = "us-east-2"  # Регіон AWS
-
-# Використання змінних середовища для AWS ключів
+# Завантаження змінних середовища
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+S3_BUCKET = os.getenv("S3_BUCKET")
 
-if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
-    raise ValueError("AWS credentials are not set in the environment.")
-    
-WEBHOOK_URL = "https://copytofilebot-a33c9815052b.herokuapp.com"  # URL вашого сервера
-PORT = 8000
+# Назва вашого Telegram-каналу
+CHAT_ID = "@thisisofshooore"  # Замініть на username вашого каналу
 
-# Ініціалізація S3
-s3_client = boto3.client(
-    "s3", 
-    region_name=AWS_REGION, 
+# Перевірка наявності змінних середовища
+if not all([BOT_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET]):
+    raise ValueError("Одне або більше змінних середовища відсутнє!")
+
+# Налаштування клієнта Amazon S3
+s3 = boto3.client(
+    "s3",
     aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
 
-# Логування
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+# Функція для отримання оновлень
+def get_updates(offset=None):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    params = {"offset": offset, "timeout": 30}
+    response = requests.get(url, params=params)
+    return response.json()
 
-# Ім'я локального файлу
-LOCAL_FILE = "telegram_posts.json"
+# Функція для збереження повідомлення у форматі JSON на S3
+def save_to_s3(message_id, content, date):
+    file_name = f"telegram_message_{message_id}.json"
+    data = {
+        "message_id": message_id,
+        "content": content,
+        "date": date,
+    }
+    # Перетворюємо дані в JSON-формат
+    json_data = json.dumps(data, ensure_ascii=False, indent=4)
+    # Зберігаємо на S3
+    s3.put_object(Bucket=S3_BUCKET, Key=file_name, Body=json_data)
+    print(f"Збережено: {file_name}")
 
-# Завантаження файлу з S3 або створення нового
-def download_from_s3():
-    try:
-        logger.debug(f"Спроба завантажити файл {S3_FILE_KEY} з S3...")
-        s3_client.download_file(S3_BUCKET_NAME, S3_FILE_KEY, LOCAL_FILE)
-        logger.info(f"Файл {S3_FILE_KEY} завантажено з S3.")
-    except Exception as e:
-        logger.warning(f"Не вдалося завантажити файл з S3: {e}. Буде створено новий.")
-        with open(LOCAL_FILE, "w", encoding="utf-8") as file:
-            json.dump([], file)
-
-# Збереження файлу до S3
-def upload_to_s3():
-    try:
-        logger.debug(f"Спроба завантажити файл {LOCAL_FILE} до S3...")
-        s3_client.upload_file(LOCAL_FILE, S3_BUCKET_NAME, S3_FILE_KEY)
-        logger.info(f"Файл {LOCAL_FILE} успішно завантажено до S3.")
-    except Exception as e:
-        logger.error(f"Помилка під час завантаження до S3: {e}")
-
-# Обробник команди /safe
-async def safe(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("Отримана команда /safe.")
-    await update.message.reply_text("Збереження повідомлень розпочато.")
-    download_from_s3()
-    upload_to_s3()
-    await update.message.reply_text("Повідомлення успішно збережено.")
-
-# Обробка оновлень із Telegram
-async def process_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"Отримано оновлення: {update}")
-    
-    if update.channel_post:
-        logger.debug(f"Перевірка отриманого каналу: {update.channel_post.chat.username}")
-        if update.channel_post.chat.username == CHANNEL_USERNAME:
-            text = update.channel_post.text
-            logger.info(f"Отримано пост з каналу {CHANNEL_USERNAME}: {text}")
-
-            # Завантаження файлу з S3
-            download_from_s3()
-            try:
-                with open(LOCAL_FILE, "r", encoding="utf-8") as file:
-                    posts = json.load(file)
-            except json.JSONDecodeError:
-                posts = []
-                logger.warning("Файл з постами порожній або має помилки в форматуванні.")
-
-            posts.append(text)
-
-            # Збереження нового файлу
-            with open(LOCAL_FILE, "w", encoding="utf-8") as file:
-                json.dump(posts, file, ensure_ascii=False, indent=4)
-
-            upload_to_s3()
-        else:
-            logger.warning(f"Отримано пост від нецільового каналу: {update.channel_post.chat.username}")
-    else:
-        logger.warning("Отримано повідомлення, яке не є каналом.")
-
-# Ініціалізація FastAPI серверу
-app = FastAPI()
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    try:
-        data = await request.json()
-        logger.debug(f"Отримано дані через webhook: {data}")
-        update = Update.de_json(data, application.bot)
-        logger.debug(f"Обробка оновлення: {update}")
-        await application.update_queue.put(update)
-    except Exception as e:
-        logger.error(f"Помилка обробки webhook: {e}")
-    return {"ok": True}
-
-# Запуск бота
-async def main():
-    global application
-    application = Application.builder().token(BOT_TOKEN).build()
-
-    # Додавання обробників
-    application.add_handler(CommandHandler("safe", safe))
-    application.add_handler(MessageHandler(filters.ChannelPost, process_update))
-
-    # Встановлення Webhook
-    logger.info("Встановлення Webhook...")
-    await application.bot.set_webhook(url="https://copytofilebot-a33c9815052b.herokuapp.com/webhook")
-
-    # Запуск FastAPI через Uvicorn
-    logger.info("Запуск FastAPI через Uvicorn...")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+# Основний цикл
+def main():
+    offset = None
+    while True:
+        updates = get_updates(offset)
+        for update in updates.get("result", []):
+            message = update.get("message")
+            if message and "text" in message:
+                message_id = message["message_id"]
+                content = message["text"]
+                # Конвертація дати у зручний формат
+                date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
+                save_to_s3(message_id, content, date)
+            offset = update["update_id"] + 1
 
 if __name__ == "__main__":
-    # Запуск бота
-    logger.info("Запуск бота...")
-    import asyncio
-    asyncio.run(main())
+    main()
