@@ -87,6 +87,8 @@ def main():
         updates = get_updates(offset)
         update_count = len(updates.get('result', []))
         print(f"[INFO] Отримано {update_count} оновлень.")
+        if update_count == 0:
+            print("[INFO] Немає нових оновлень. Чекаємо...")
         for update in updates.get("result", []):
             print(f"[INFO] Обробка оновлення: {json.dumps(update, ensure_ascii=False, indent=4)}")
             message = update.get("message")
@@ -97,6 +99,7 @@ def main():
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
                 save_to_s3(message_id, content, date)
             offset = update["update_id"] + 1
+            print(f"[INFO] Оновлено offset до {offset}")
 
 if __name__ == "__main__":
     try:
