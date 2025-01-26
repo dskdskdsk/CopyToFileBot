@@ -35,7 +35,7 @@ def get_updates(offset=None):
         print(f"[INFO] Виконується запит до Telegram API з offset={offset}...")
         response = requests.get(url, params=params)
         response.raise_for_status()  # Перевірка на помилки HTTP
-        print(f"[SUCCESS] Успішно отримано оновлення від Telegram API.")
+        print(f"[INFO] Успішно отримано оновлення від Telegram API.")
         return response.json()
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Помилка при отриманні оновлень: {e}")
@@ -47,10 +47,10 @@ def load_messages_from_s3():
         print(f"[INFO] Завантаження файлу {FILE_NAME} з S3...")
         response = s3.get_object(Bucket=S3_BUCKET, Key=FILE_NAME)
         content = response['Body'].read().decode('utf-8')
-        print(f"[SUCCESS] Файл {FILE_NAME} успішно завантажено з S3.")
+        print(f"[INFO] Файл {FILE_NAME} успішно завантажено з S3.")
         return json.loads(content)  # Повертаємо список повідомлень
     except s3.exceptions.NoSuchKey:
-        print(f"[WARNING] Файл {FILE_NAME} не знайдено, створюється новий.")
+        print(f"[INFO] Файл {FILE_NAME} не знайдено, створюється новий.")
         return []  # Якщо файл не існує, повертаємо порожній список
     except Exception as e:
         print(f"[ERROR] Помилка при завантаженні з S3: {e}")
@@ -87,8 +87,10 @@ def main():
         updates = get_updates(offset)
         update_count = len(updates.get('result', []))
         print(f"[INFO] Отримано {update_count} оновлень.")
+        
         if update_count == 0:
-            print("[INFO] Немає нових оновлень. Чекаємо...")
+            print("[INFO] Немає нових оновлень.")
+        
         for update in updates.get("result", []):
             print(f"[INFO] Обробка оновлення: {json.dumps(update, ensure_ascii=False, indent=4)}")
             message = update.get("message")
@@ -97,9 +99,11 @@ def main():
                 content = message["text"]
                 # Конвертація дати у зручний формат
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
+                print(f"[INFO] Збереження повідомлення ID={message_id}, Текст={content}")
                 save_to_s3(message_id, content, date)
+            else:
+                print(f"[INFO] Повідомлення без тексту або іншого оброблюваного вмісту.")
             offset = update["update_id"] + 1
-            print(f"[INFO] Оновлено offset до {offset}")
 
 if __name__ == "__main__":
     try:
@@ -108,4 +112,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("[INFO] Програму зупинено вручну.")
     except Exception as e:
-        print(f"[CRITICAL] Невідома помилка: {e}")
+        print(f"[ERROR] Невідома помилка: {e}")
