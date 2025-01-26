@@ -10,9 +10,6 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = os.getenv("S3_BUCKET")
 
-# Назва вашого Telegram-каналу
-CHAT_ID = "@thisisofshooore"  # Замініть на username вашого каналу
-
 # Назва файлу на S3
 FILE_NAME = "telegram_messages.json"
 
@@ -34,7 +31,7 @@ def get_updates(offset=None):
     try:
         print(f"Виконується запит до Telegram API з offset={offset}...")
         response = requests.get(url, params=params)
-        response.raise_for_status()  # Перевірка на помилки HTTP
+        response.raise_for_status()
         print(f"Успішно отримано оновлення від Telegram API.")
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -82,17 +79,35 @@ def save_to_s3(message_id, content, date):
 # Основний цикл
 def main():
     offset = None
-    print("Запуск основного циклу для отримання оновлень...")
+    print("Запуск основного циклу для отримання всіх доступних повідомлень...")
+    
+    # Крок 1: Отримання всіх старих повідомлень
     while True:
         updates = get_updates(offset)
-        print(f"Отримано {len(updates.get('result', []))} оновлень.")
-        for update in updates.get("result", []):
-            print(f"Обробка оновлення: {update}")
+        results = updates.get("result", [])
+        print(f"Отримано {len(results)} оновлень.")
+        if not results:
+            break  # Вихід з циклу, якщо нових оновлень немає
+
+        for update in results:
             message = update.get("message")
             if message and "text" in message:
                 message_id = message["message_id"]
                 content = message["text"]
-                # Конвертація дати у зручний формат
+                date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
+                save_to_s3(message_id, content, date)
+            offset = update["update_id"] + 1  # Зміщення offset для наступного запиту
+
+    print("Усі старі повідомлення оброблено. Перехід до режиму очікування нових повідомлень...")
+    
+    # Крок 2: Режим очікування нових повідомлень
+    while True:
+        updates = get_updates(offset)
+        for update in updates.get("result", []):
+            message = update.get("message")
+            if message and "text" in message:
+                message_id = message["message_id"]
+                content = message["text"]
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
                 save_to_s3(message_id, content, date)
             offset = update["update_id"] + 1
