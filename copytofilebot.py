@@ -107,7 +107,7 @@ def main():
         for update in results:
             print(f"[DEBUG] Обробка оновлення: {update}")
             message = update.get("message")
-            if message and "text" in message:
+            if message and "text" in message:  # Звичайні повідомлення
                 message_id = message["message_id"]
                 content = message["text"]
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
@@ -115,6 +115,20 @@ def main():
 
                 # Збереження повідомлення у файл
                 file_name = save_message_to_file(message)
+                if file_name:
+                    # Завантаження файлу на S3
+                    upload_to_s3(file_name)
+
+            # Обробка повідомлень типу 'channel_post' (пости з каналу)
+            channel_post = update.get("channel_post")
+            if channel_post and "text" in channel_post:  # Перевірка на наявність тексту
+                post_id = channel_post["message_id"]
+                content = channel_post["text"]
+                date = datetime.utcfromtimestamp(channel_post["date"]).strftime('%Y-%m-%d %H:%M:%S')
+                print(f"[INFO] Нове повідомлення з каналу: ID={post_id}, Дата={date}, Текст={content}")
+
+                # Збереження посту у файл
+                file_name = save_message_to_file(channel_post)
                 if file_name:
                     # Завантаження файлу на S3
                     upload_to_s3(file_name)
