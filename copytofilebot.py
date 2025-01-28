@@ -12,7 +12,7 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = os.getenv("S3_BUCKET")
 CHAT_ID = "@thisisofshooore"  # Назва вашого Telegram-каналу
 OFFSET_FILE = "offset.json"  # Назва файлу для збереження offset у S3
-POSTS_FILE = "posts.json"   # Назва файлу для збереження всіх постів
+ALL_MESSAGES_FILE = "all_messages.json"  # Назва файлу для збереження всіх повідомлень
 
 # Перевірка змінних середовища
 if not all([BOT_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET]):
@@ -51,47 +51,21 @@ def save_offset_to_s3(offset):
     except Exception as e:
         print(f"[ERROR] Помилка при збереженні OFFSET у S3: {e}")
 
-# Завантаження постів з файлу
-def load_posts_from_file():
-    if os.path.exists(POSTS_FILE):
-        with open(POSTS_FILE, "r", encoding="utf-8") as f:
+# Завантаження всіх повідомлень з файлу
+def load_all_messages():
+    if os.path.exists(ALL_MESSAGES_FILE):
+        with open(ALL_MESSAGES_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    else:
-        return []
+    return []
 
-# Збереження постів у файл
-def save_posts_to_file(posts_data):
+# Збереження всіх повідомлень в файл
+def save_all_messages(messages):
     try:
-        with open(POSTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(posts_data, f, ensure_ascii=False, indent=4)
-        print(f"[INFO] Усі пости успішно збережено в файл {POSTS_FILE}.")
+        with open(ALL_MESSAGES_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages, f, ensure_ascii=False, indent=4)
+        print(f"[INFO] Усі повідомлення успішно збережено в файл {ALL_MESSAGES_FILE}.")
     except Exception as e:
-        print(f"[ERROR] Помилка при збереженні постів у файл {POSTS_FILE}: {e}")
-
-# Додавання нового посту до списку з перевіркою на дублікати
-def add_post_to_list(posts_data, message):
-    message_id = message["message_id"]
-    
-    # Перевіряємо, чи вже є такий пост в списку
-    for post in posts_data:
-        if post["message_id"] == message_id:
-            print(f"[INFO] Пост з ID={message_id} вже додано, пропускаємо.")
-            return posts_data  # Повертаємо список без змін, якщо дубль
-    
-    # Якщо посту немає в списку, додаємо новий
-    date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
-    text = message.get("text", "")
-    
-    post = {
-        "message_id": message_id,
-        "date": date,
-        "text": text,
-        "processed": False
-    }
-    
-    posts_data.append(post)
-    print(f"[INFO] Пост з ID={message_id} додано в список.")
-    return posts_data
+        print(f"[ERROR] Помилка при збереженні повідомлень у файл: {e}")
 
 # Отримання оновлень із Telegram API
 def get_updates(offset=None):
@@ -114,8 +88,8 @@ def main():
     # Завантажуємо OFFSET із S3
     offset = load_offset_from_s3()
 
-    # Завантажуємо пости з файлу
-    posts_data = load_posts_from_file()
+    # Завантажуємо всі існуючі повідомлення
+    all_messages = load_all_messages()
 
     while True:
         updates = get_updates(offset)
@@ -129,21 +103,41 @@ def main():
         for update in results:
             print(f"[DEBUG] Обробка оновлення: {update}")
             message = update.get("message")
-            if message and "text" in message:
+            if message and "text" in message:  # Звичайні повідомлення
                 message_id = message["message_id"]
                 content = message["text"]
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
                 print(f"[INFO] Нове повідомлення: ID={message_id}, Дата={date}, Текст={content}")
 
-                # Додаємо пост до списку, якщо він унікальний
-                posts_data = add_post_to_list(posts_data, message)
+                # Додаємо повідомлення до списку
+                all_messages.append({
+                    "message_id": message_id,
+                    "date": message["date"],
+                    "content": content,
+                })
 
+            # Обробка повідомлень типу 'channel_post' (пости з каналу)
+            channel_post = update.get("channel_post")
+            if channel_post and "text" in channel_post:  # Перевірка на наявність тексту
+                post_id = channel_post["message_id"]
+                content = channel_post["text"]
+                date = datetime.utcfromtimestamp(channel_post["date"]).strftime('%Y-%m-%d %H:%M:%S')
+                print(f"[INFO] Нове повідомлення з каналу: ID={post_id}, Дата={date}, Текст={content}")
+
+                # Додаємо пост до списку
+                all_messages.append({
+                    "message_id": post_id,
+                    "date": channel_post["date"],
+                    "content": content,
+                })
+
+            # Оновлюємо OFFSET
             offset = update["update_id"] + 1
             print(f"[DEBUG] Новий OFFSET: {offset}")
             save_offset_to_s3(offset)  # Збереження OFFSET у S3
 
-        # Збереження всіх постів в один файл
-        save_posts_to_file(posts_data)
+        # Збереження всіх повідомлень в один файл
+        save_all_messages(all_messages)
 
         # Невелика пауза перед наступним запитом
         time.sleep(1)
