@@ -12,7 +12,6 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = os.getenv("S3_BUCKET")
 CHAT_ID = "@thisisofshooore"  # Назва вашого Telegram-каналу
 OFFSET_FILE = "offset.json"  # Назва файлу для збереження offset у S3
-ALL_MESSAGES_FILE = "all_messages.json"  # Назва файлу для збереження всіх повідомлень
 
 # Перевірка змінних середовища
 if not all([BOT_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET]):
@@ -51,22 +50,6 @@ def save_offset_to_s3(offset):
     except Exception as e:
         print(f"[ERROR] Помилка при збереженні OFFSET у S3: {e}")
 
-# Завантаження всіх повідомлень з файлу
-def load_all_messages():
-    if os.path.exists(ALL_MESSAGES_FILE):
-        with open(ALL_MESSAGES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-# Збереження всіх повідомлень в файл
-def save_all_messages(messages):
-    try:
-        with open(ALL_MESSAGES_FILE, "w", encoding="utf-8") as f:
-            json.dump(messages, f, ensure_ascii=False, indent=4)
-        print(f"[INFO] Усі повідомлення успішно збережено в файл {ALL_MESSAGES_FILE}.")
-    except Exception as e:
-        print(f"[ERROR] Помилка при збереженні повідомлень у файл: {e}")
-
 # Отримання оновлень із Telegram API
 def get_updates(offset=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
@@ -81,15 +64,36 @@ def get_updates(offset=None):
         print(f"[ERROR] Помилка при запиті до Telegram API: {e}")
         return {"result": []}
 
+# Збереження повідомлення у локальний файл
+def save_message_to_file(message):
+    try:
+        message_id = message["message_id"]
+        date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d_%H-%M-%S')
+        file_name = f"message_{message_id}_{date}.json"
+        with open(file_name, "w", encoding="utf-8") as f:
+            json.dump(message, f, ensure_ascii=False, indent=4)
+        print(f"[INFO] Повідомлення ID={message_id} збережено у файл {file_name}.")
+        return file_name
+    except Exception as e:
+        print(f"[ERROR] Помилка при збереженні повідомлення у файл: {e}")
+        return None
+
+# Завантаження файлу на S3
+def upload_to_s3(file_name):
+    try:
+        print(f"[DEBUG] Завантаження файлу {file_name} на S3...")
+        with open(file_name, "rb") as f:
+            s3.upload_fileobj(f, S3_BUCKET, file_name)
+        print(f"[INFO] Файл {file_name} успішно завантажено на S3.")
+    except Exception as e:
+        print(f"[ERROR] Помилка при завантаженні файлу {file_name} на S3: {e}")
+
 # Основний цикл
 def main():
     print("[INFO] Запуск програми для отримання повідомлень...")
 
     # Завантажуємо OFFSET із S3
     offset = load_offset_from_s3()
-
-    # Завантажуємо всі існуючі повідомлення
-    all_messages = load_all_messages()
 
     while True:
         updates = get_updates(offset)
@@ -109,12 +113,11 @@ def main():
                 date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d %H:%M:%S')
                 print(f"[INFO] Нове повідомлення: ID={message_id}, Дата={date}, Текст={content}")
 
-                # Додаємо повідомлення до списку
-                all_messages.append({
-                    "message_id": message_id,
-                    "date": message["date"],
-                    "content": content,
-                })
+                # Збереження повідомлення у файл
+                file_name = save_message_to_file(message)
+                if file_name:
+                    # Завантаження файлу на S3
+                    upload_to_s3(file_name)
 
             # Обробка повідомлень типу 'channel_post' (пости з каналу)
             channel_post = update.get("channel_post")
@@ -124,20 +127,15 @@ def main():
                 date = datetime.utcfromtimestamp(channel_post["date"]).strftime('%Y-%m-%d %H:%M:%S')
                 print(f"[INFO] Нове повідомлення з каналу: ID={post_id}, Дата={date}, Текст={content}")
 
-                # Додаємо пост до списку
-                all_messages.append({
-                    "message_id": post_id,
-                    "date": channel_post["date"],
-                    "content": content,
-                })
+                # Збереження посту у файл
+                file_name = save_message_to_file(channel_post)
+                if file_name:
+                    # Завантаження файлу на S3
+                    upload_to_s3(file_name)
 
-            # Оновлюємо OFFSET
             offset = update["update_id"] + 1
             print(f"[DEBUG] Новий OFFSET: {offset}")
             save_offset_to_s3(offset)  # Збереження OFFSET у S3
-
-        # Збереження всіх повідомлень в один файл
-        save_all_messages(all_messages)
 
         # Невелика пауза перед наступним запитом
         time.sleep(1)
