@@ -3,6 +3,7 @@ import json
 import requests
 import boto3
 from datetime import datetime
+import time
 
 # Налаштування
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -67,7 +68,6 @@ def get_updates(offset=None):
 def save_message_to_file(message):
     try:
         message_id = message["message_id"]
-        content = message["text"]
         date = datetime.utcfromtimestamp(message["date"]).strftime('%Y-%m-%d_%H-%M-%S')
         file_name = f"message_{message_id}_{date}.json"
         with open(file_name, "w", encoding="utf-8") as f:
@@ -97,8 +97,9 @@ def main():
 
     while True:
         updates = get_updates(offset)
-        if updates is None:
-            print("[WARNING] Отримано порожню відповідь від Telegram API.")
+        if not updates or "result" not in updates:
+            print("[WARNING] Отримано некоректну відповідь від Telegram API.")
+            time.sleep(5)
             continue
 
         results = updates.get("result", [])
@@ -121,6 +122,9 @@ def main():
             offset = update["update_id"] + 1
             print(f"[DEBUG] Новий OFFSET: {offset}")
             save_offset_to_s3(offset)  # Збереження OFFSET у S3
+
+        # Невелика пауза перед наступним запитом
+        time.sleep(1)
 
 
 if __name__ == "__main__":
